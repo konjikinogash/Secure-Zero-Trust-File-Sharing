@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Zero-Trust File Sharing</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">ZT<span>FILE</span></div>
+      <div>
+        <b>Secure Zero-Trust File Sharing System</b>
+        <small>Classroom demonstration prototype · Default-deny security model</small>
+      </div>
+      <span class="local" id="transportBadge">● LOCAL ONLY · HTTP 127.0.0.1:4173</span>
+    </header>
+
+    <!-- Authentication Section (Sign In & Register) -->
+    <section id="login" class="card login">
+      <div class="eyebrow">AUTHENTICATION</div>
+      
+      <div class="auth-tabs">
+        <button type="button" id="tabSignIn" class="tab-btn active">Sign In</button>
+        <button type="button" id="tabRegister" class="tab-btn">+ Register New User</button>
+      </div>
+
+      <!-- Sign In Form -->
+      <div id="signInPane">
+        <h1>Sign in to your workspace</h1>
+        <p>Authentication verifies identity; file access is checked separately on every operation under default-deny rules.</p>
+        
+        <form id="loginForm">
+          <label>
+            Username
+            <input id="username" autocomplete="username" required placeholder="e.g. asha">
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" autocomplete="current-password" required placeholder="e.g. asha123">
+          </label>
+          <button type="submit" id="loginBtn">Sign In</button>
+        </form>
+      </div>
+
+      <!-- Register Form -->
+      <div id="registerPane" hidden>
+        <h1>Create a new account</h1>
+        <p>New users are automatically saved with salted scrypt password hashing and enrolled into the Zero-Trust system.</p>
+        
+        <form id="registerForm">
+          <label>
+            New Username
+            <input id="regUsername" autocomplete="username" required placeholder="e.g. priya">
+          </label>
+          <label>
+            Password
+            <input id="regPassword" type="password" autocomplete="new-password" required placeholder="Min 4 characters">
+          </label>
+          <label>
+            Role
+            <select id="regRole" required>
+              <option value="Student">Student (Upload private files, receive shared files)</option>
+              <option value="Faculty">Faculty (Access files shared by students/faculty/admin)</option>
+              <option value="Admin">Admin (Full administrative &amp; audit access)</option>
+            </select>
+          </label>
+          <button type="submit" id="regBtn" class="primary-btn">Create Account &amp; Sign In</button>
+        </form>
+      </div>
+
+      <div class="demo-accounts">
+        <b>Demo Accounts (Click to auto-fill)</b>
+        <button type="button" class="demo-chip" data-user="asha" data-pass="asha123">
+          <strong>asha</strong> / asha123 <span class="role-badge student">Student</span>
+        </button>
+        <button type="button" class="demo-chip" data-user="rao" data-pass="rao123">
+          <strong>rao</strong> / rao123 <span class="role-badge faculty">Faculty</span>
+        </button>
+        <button type="button" class="demo-chip" data-user="ravi" data-pass="ravi123">
+          <strong>ravi</strong> / ravi123 <span class="role-badge student">Student</span>
+        </button>
+        <button type="button" class="demo-chip" data-user="admin" data-pass="admin123">
+          <strong>admin</strong> / admin123 <span class="role-badge admin">Admin</span>
+        </button>
+      </div>
+      <div class="hint-box">
+        Passwords are validated against per-user salted scrypt hashes. Plaintext passwords are never stored or logged.
+      </div>
+    </section>
+
+    <!-- Authenticated Workspace Section -->
+    <section id="workspace" hidden>
+      <div class="welcome">
+        <div>
+          <div class="eyebrow">AUTHENTICATED SESSION</div>
+          <h1>Welcome, <span id="who"></span> <span id="roleBadge" class="role-badge"></span></h1>
+          <p id="roleDescription" class="muted"></p>
+        </div>
+        <button id="logout" class="secondary">Sign out</button>
+      </div>
+
+      <div class="grid">
+        <!-- Encrypt & Upload Card -->
+        <article class="card">
+          <div class="eyebrow">ENCRYPT + UPLOAD</div>
+          <h2>Upload Encrypted File</h2>
+          <p>Files are hashed with SHA-256, then encrypted with <b>AES-256-GCM</b> using a fresh random IV. Plaintext never reaches the disk.</p>
+          
+          <div class="drop-zone">
+            <label class="filepick">
+              <span>Choose File</span>
+              <input id="fileInput" type="file">
+            </label>
+            <div id="picked" class="file-info-label">No file selected (Max size: 10 MB)</div>
+          </div>
+          
+          <button id="upload" class="primary-btn" disabled>Encrypt and Upload</button>
+          
+          <div class="security-steps">
+            <div class="step-item"><b>1. Digest:</b> Compute SHA-256 pre-encryption digest</div>
+            <div class="step-item"><b>2. Cipher:</b> AES-256-GCM + 96-bit fresh random IV</div>
+            <div class="step-item"><b>3. Storage:</b> Save ciphertext blob &amp; metadata</div>
+          </div>
+        </article>
+
+        <!-- Access-Controlled Files Card -->
+        <article class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="eyebrow">ZERO-TRUST FILES</div>
+              <h2>Accessible Files</h2>
+            </div>
+            <button id="refreshBtn" class="icon-btn" title="Refresh files">↻ Refresh</button>
+          </div>
+          <p>Only files you own, or files explicitly shared with you, are visible and downloadable. Unlisted files are denied.</p>
+          
+          <div id="files" class="files-list"></div>
+          <div id="empty" class="muted empty-state">No files available to your account under current zero-trust policies.</div>
+        </article>
+      </div>
+
+      <!-- Security Details & Live Audit Log -->
+      <div class="grid-sub">
+        <article class="card security">
+          <div class="eyebrow">ZERO-TRUST POLICY ENFORCEMENT</div>
+          <h3>Server Security Verification</h3>
+          <ul class="policy-list">
+            <li><b>Default Deny:</b> Unauthenticated or unlisted requests return 401 or 403.</li>
+            <li><b>Storage at Rest:</b> Raw bytes in <code>storage/*.aes</code> are ciphertext blobs.</li>
+            <li><b>Integrity Verification:</b> Server checks AES-GCM tag + SHA-256 digest before download. Browser re-verifies after download.</li>
+            <li><b>Transport:</b> Local-only HTTP bound to <code>127.0.0.1</code>. Not exposed to external networks.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <div class="card-header-flex">
+            <div>
+              <div class="eyebrow">AUDIT TRAIL</div>
+              <h3>Live Server Access Log</h3>
+            </div>
+            <small class="muted">Mirrors terminal window</small>
+          </div>
+          <div id="activityLog" class="activity-log-box">
+            <div class="log-placeholder">Waiting for server events...</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Toast Banner -->
+    <div id="toast" role="status"></div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
